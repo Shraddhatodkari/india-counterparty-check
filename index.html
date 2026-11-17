@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>India Counterparty Check</title>
+<meta name="author" content="Shraddha Todkari">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<style>
+/* Layout idea: a registry file. One narrow column, ruled sections, identifiers in mono, state shown as a stripe + pill. */
+:root {
+  --paper: #F4F6F9; --card: #FFFFFF; --ink: #0B2545; --muted: #5A6B85; --rule: #D5DCE6;
+  --accent: #B5730E; --accent-soft: #FBF1DD;
+  --ok: #1F7A4D; --ok-soft: #E4F3EB; --warn: #9A5B00; --warn-soft: #FBF1DD; --bad: #B3261E; --bad-soft: #FBE9E7;
+  --display: "IBM Plex Sans Condensed", "Arial Narrow", Arial, sans-serif;
+  --body: "IBM Plex Sans", "Segoe UI", Arial, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0A1626; --card: #11223A; --ink: #E8EEF7; --muted: #9DB0CC; --rule: #29405F;
+    --accent: #E6A94A; --accent-soft: #33290F;
+    --ok: #6FD3A0; --ok-soft: #12332A; --warn: #E6A94A; --warn-soft: #33290F; --bad: #FF8A80; --bad-soft: #3A1917;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0A1626; --card: #11223A; --ink: #E8EEF7; --muted: #9DB0CC; --rule: #29405F;
+  --accent: #E6A94A; --accent-soft: #33290F;
+  --ok: #6FD3A0; --ok-soft: #12332A; --warn: #E6A94A; --warn-soft: #33290F; --bad: #FF8A80; --bad-soft: #3A1917;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--paper); color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.5; }
+main { max-width: 760px; margin: 0 auto; padding: 28px 18px 56px; display: flex; flex-direction: column; gap: 28px; }
+h1, h2, h3 { font-family: var(--display); margin: 0; text-wrap: balance; }
+h1 { font-size: 34px; line-height: 1.08; letter-spacing: -0.3px; }
+h2 { font-size: 22px; line-height: 1.2; }
+h3 { font-size: 13px; letter-spacing: 1.4px; text-transform: uppercase; color: var(--muted); font-family: var(--body); font-weight: 600; }
+p { margin: 0; max-width: 65ch; }
+a { color: inherit; text-decoration-color: var(--accent); text-underline-offset: 3px; }
+.mono { font-family: var(--mono); font-size: 0.9em; overflow-wrap: anywhere; }
+.muted { color: var(--muted); }
+.small { font-size: 14px; }
+
+header { display: flex; flex-direction: column; gap: 12px; border-bottom: 3px solid var(--ink); padding-bottom: 20px; }
+.eyebrow { font-size: 13px; letter-spacing: 1.4px; text-transform: uppercase; color: var(--accent); font-weight: 600; }
+.byline { font-size: 14px; color: var(--muted); }
+.fresh { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { font-size: 12.5px; border: 1px solid var(--rule); border-radius: 4px; padding: 3px 8px; color: var(--muted); background: var(--card); }
+
+section { display: flex; flex-direction: column; gap: 14px; }
+.card { background: var(--card); border: 1px solid var(--rule); border-radius: 8px; padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+
+form { display: flex; gap: 8px; flex-wrap: wrap; }
+input[type="text"] { flex: 1 1 220px; min-width: 0; font: inherit; padding: 11px 12px; border: 1.5px solid var(--ink); border-radius: 6px; background: var(--card); color: var(--ink); }
+button { font: inherit; font-weight: 600; cursor: pointer; border-radius: 6px; }
+button.go { padding: 11px 18px; background: var(--ink); color: var(--paper); border: 1.5px solid var(--ink); }
+button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.tries { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.tries button, .picker button { background: var(--card); color: var(--ink); border: 1px solid var(--rule); padding: 6px 10px; font-size: 14px; font-weight: 500; }
+.tries button:hover, .picker button:hover { border-color: var(--ink); }
+
+.verdict { border-left: 6px solid var(--muted); padding: 10px 14px; border-radius: 0 6px 6px 0; display: flex; flex-direction: column; gap: 4px; background: var(--paper); }
+.verdict strong { font-family: var(--display); font-size: 19px; }
+.v-ok { border-color: var(--ok); background: var(--ok-soft); } .v-ok strong { color: var(--ok); }
+.v-warn { border-color: var(--warn); background: var(--warn-soft); } .v-warn strong { color: var(--warn); }
+.v-bad { border-color: var(--bad); background: var(--bad-soft); } .v-bad strong { color: var(--bad); }
+
+.hit { border-top: 1px solid var(--rule); padding-top: 12px; display: flex; flex-direction: column; gap: 6px; }
+.hit-top { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+.hit-name { font-weight: 600; overflow-wrap: anywhere; }
+.score { font-family: var(--mono); font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.bar { height: 6px; background: var(--rule); border-radius: 3px; overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--bad); }
+.bar.weak i { background: var(--warn); }
+
+.picker { display: flex; flex-wrap: wrap; gap: 8px; }
+.picker button { display: inline-flex; align-items: center; gap: 7px; }
+.picker button[aria-pressed="true"] { border-color: var(--ink); background: var(--ink); color: var(--paper); }
+.dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.d-STANDARD { background: var(--ok); } .d-REVIEW { background: var(--warn); } .d-ESCALATE { background: var(--bad); }
+
+dl { margin: 0; display: grid; grid-template-columns: minmax(110px, 34%) 1fr; gap: 8px 14px; }
+dt { color: var(--muted); font-size: 14px; }
+dd { margin: 0; overflow-wrap: anywhere; }
+.chain { display: flex; flex-direction: column; gap: 0; }
+.node { border: 1px solid var(--rule); border-radius: 6px; padding: 9px 12px; display: flex; flex-direction: column; }
+.node b { font-weight: 600; }
+.link { width: 2px; height: 16px; background: var(--rule); margin-left: 22px; }
+.flag { display: flex; gap: 10px; align-items: baseline; }
+.tag { font-family: var(--mono); font-size: 12.5px; padding: 1px 6px; border-radius: 4px; white-space: nowrap; }
+.t-high { background: var(--bad-soft); color: var(--bad); } .t-medium { background: var(--warn-soft); color: var(--warn); }
+ol.steps { margin: 0; padding: 0; list-style: none; counter-reset: s; display: flex; flex-direction: column; gap: 10px; }
+ol.steps li { counter-increment: s; display: grid; grid-template-columns: 26px 1fr; gap: 8px; }
+ol.steps li::before { content: counter(s); font-family: var(--mono); font-size: 13px; width: 24px; height: 24px; border-radius: 50%; border: 1.5px solid var(--ink); display: grid; place-items: center; }
+ol.steps b { display: block; font-weight: 600; }
+
+.tests { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.test { border: 1px solid var(--rule); border-radius: 6px; padding: 12px; background: var(--card); display: flex; flex-direction: column; gap: 2px; }
+.test .n { font-family: var(--display); font-size: 28px; font-variant-numeric: tabular-nums; line-height: 1.1; }
+ul.plain { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; max-width: 65ch; }
+footer { border-top: 1px solid var(--rule); padding-top: 16px; font-size: 14px; color: var(--muted); display: flex; flex-direction: column; gap: 6px; }
+@media (max-width: 420px) { h1 { font-size: 28px; } dl { grid-template-columns: 1fr; gap: 2px 0; } dd { margin-bottom: 8px; } }
+@media (prefers-reduced-motion: no-preference) { .bar i { transition: width .3s ease; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">Working prototype · due diligence</div>
+    <h1>India Counterparty Check</h1>
+    <p>Before a bank or an advisor works with a company, someone has to confirm who it legally is, who owns it, and whether it is on a sanctions list. This tool does those checks from official sources and shows where every fact came from. A person still makes the decision.</p>
+    <div class="byline">Built by Shraddha Todkari · independent project, not a certified compliance product</div>
+    <div class="fresh" id="fresh"></div>
+  </header>
+
+  <section aria-labelledby="h-screen">
+    <h2 id="h-screen">Screen any company name</h2>
+    <div class="card">
+      <form id="f">
+        <input type="text" id="q" autocomplete="off" placeholder="Type a company name" aria-label="Company name to screen">
+        <button class="go" type="submit" id="go">Screen</button>
+      </form>
+      <div class="tries"><span class="small muted">Try:</span>
+        <button type="button" data-q="Infosys Ltd">Infosys Ltd</button>
+        <button type="button" data-q="Sberbank">Sberbank</button>
+        <button type="button" data-q="Gazprombnak JSC">Gazprombnak JSC (misspelt)</button>
+        <button type="button" data-q="Tata Steel">Tata Steel</button>
+      </div>
+      <div id="live" aria-live="polite"><p class="small muted" id="loading">Loading the sanctions lists…</p></div>
+      <p class="small muted">Runs in your browser against the bundled lists. Companies and organisations only; people are not screened here.</p>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-reports">
+    <h2 id="h-reports">Full check on real companies</h2>
+    <p class="small muted">Each report below is the saved output of a real run. Pick a company.</p>
+    <div class="picker" id="picker" role="group" aria-label="Choose a company"></div>
+    <div id="report"></div>
+  </section>
+
+  <section aria-labelledby="h-tests">
+    <h2 id="h-tests">How well the name matching works</h2>
+    <p class="small muted">I changed real list names on purpose and checked whether the tool still found them. I also ran clean Indian company names to count false alarms.</p>
+    <div class="tests" id="tests"></div>
+  </section>
+
+  <section aria-labelledby="h-limits">
+    <h2 id="h-limits">What it does not do yet</h2>
+    <ul class="plain">
+      <li>It screens the OFAC and UN lists only. EU, UK and Indian lists are not included.</li>
+      <li>Ownership comes from GLEIF, which reports accounting parents. It does not show the individual beneficial owners.</li>
+      <li>Court, insolvency (NCLT) and GST records are not connected. Those need licensed or logged-in access.</li>
+      <li>A name match is a lead for a reviewer to check. It is never proof that two companies are the same.</li>
+      <li>Reports are a snapshot from the date shown. Lists and registry records change.</li>
+    </ul>
+  </section>
+
+  <footer>
+    <div>Sources: <a href="https://sanctionssearch.ofac.treas.gov/">OFAC Specially Designated Nationals list</a> (US Treasury) · <a href="https://main.un.org/securitycouncil/en/content/un-sc-consolidated-list">UN Security Council Consolidated List</a> · <a href="https://search.gleif.org/">GLEIF Global LEI Index</a>, which carries each Indian company's CIN from the Ministry of Corporate Affairs.</div>
+    <div>© 2026 Shraddha Todkari</div>
+  </footer>
+</main>
+
+<script>/* Name screening: normalise, weight rare words more (IDF), allow small spelling changes. */
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) module.exports = factory();
+  else root.Matcher = factory();
+})(typeof self !== 'undefined' ? self : this, function () {
+  var LEGAL = {};
+  ('LIMITED LTD PRIVATE PVT INC INCORPORATED CORP CORPORATION CO COMPANY LLC LLP PLC SA AG GMBH OOO OAO ZAO AO JSC PJSC OJSC CJSC ' +
+   'PUBLIC JOINT STOCK OPEN CLOSED SOCIETY FZE FZC FZCO OPC SDN BHD BV NV SRL SARL SPA THE OF AND FOR DE').split(' ')
+    .forEach(function (t) { LEGAL[t] = 1; });
+
+  function normalise(s) {
+    return String(s || '').normalize('NFKD').replace(/[̀-ͯ]/g, '').toUpperCase()
+      .replace(/&/g, ' AND ').replace(/[^A-Z0-9]+/g, ' ').trim();
+  }
+  function tokens(s) {
+    var all = normalise(s).split(' ').filter(Boolean);
+    var kept = all.filter(function (t) { return !LEGAL[t]; });
+    return kept.length ? kept : all;
+  }
+  // Damerau-Levenshtein distance: a swapped pair of letters counts as one edit.
+  function dist(a, b) {
+    var m = a.length, n = b.length, d = [], i, j;
+    for (i = 0; i <= m; i++) { d[i] = [i]; }
+    for (j = 1; j <= n; j++) d[0][j] = j;
+    for (i = 1; i <= m; i++) {
+      for (j = 1; j <= n; j++) {
+        var c = a.charCodeAt(i - 1) === b.charCodeAt(j - 1) ? 0 : 1;
+        d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + c);
+        if (i > 1 && j > 1 && a.charCodeAt(i - 1) === b.charCodeAt(j - 2) && a.charCodeAt(i - 2) === b.charCodeAt(j - 1)) {
+          d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+        }
+      }
+    }
+    return d[m][n];
+  }
+  // Exact word = 1. One edit in a word of 5+ letters = 0.88. Two edits in a word of 9+ letters = 0.8.
+  function tokSim(a, b) {
+    if (a === b) return 1;
+    var L = Math.min(a.length, b.length);
+    if (L < 5 || Math.abs(a.length - b.length) > 2) return 0;
+    var k = dist(a, b);
+    if (k === 1) return 0.88;
+    if (k === 2 && L >= 9) return 0.8;
+    return 0;
+  }
+
+  function build(records) {
+    var names = [], df = {}, byTok = {}, byPre = {};
+    records.forEach(function (r, ri) {
+      [r.n].concat(r.a || []).forEach(function (nm, k) {
+        var t = tokens(nm);
+        if (!t.length) return;
+        var id = names.length;
+        names.push({ r: ri, name: nm, alias: k > 0, t: t });
+        var seen = {};
+        t.forEach(function (x) {
+          if (seen[x]) return; seen[x] = 1;
+          df[x] = (df[x] || 0) + 1;
+          (byTok[x] = byTok[x] || []).push(id);
+          if (x.length >= 5) { (byPre['^' + x.slice(0, 3)] = byPre['^' + x.slice(0, 3)] || {})[x] = 1; (byPre['$' + x.slice(-3)] = byPre['$' + x.slice(-3)] || {})[x] = 1; }
+        });
+      });
+    });
+    var N = names.length, maxW = Math.log(N + 1);
+    function w(t) { return df[t] ? Math.log((N + 1) / df[t]) : maxW; }
+
+    function scorePair(q, c) {
+      function cover(A, B) {
+        var num = 0, den = 0;
+        A.forEach(function (a) {
+          var best = 0;
+          for (var i = 0; i < B.length && best < 1; i++) { var s = tokSim(a, B[i]); if (s > best) best = s; }
+          var wa = w(a); num += wa * best; den += wa;
+        });
+        return den ? num / den : 0;
+      }
+      var s1 = cover(q, c), s2 = cover(c, q);
+      return (s1 + s2) ? 100 * 2 * s1 * s2 / (s1 + s2) : 0;
+    }
+
+    function screen(query, opts) {
+      opts = opts || {};
+      var min = opts.min == null ? 80 : opts.min, q = tokens(query), cand = {};
+      if (!q.length) return [];
+      q.forEach(function (t) {
+        (byTok[t] || []).forEach(function (id) { cand[id] = 1; });
+        if (t.length >= 5) {
+          ['^' + t.slice(0, 3), '$' + t.slice(-3)].forEach(function (key) {
+            Object.keys(byPre[key] || {}).forEach(function (x) {
+              if (x !== t && tokSim(t, x)) (byTok[x] || []).forEach(function (id) { cand[id] = 1; });
+            });
+          });
+        }
+      });
+      var best = {};
+      Object.keys(cand).forEach(function (id) {
+        var nm = names[id], s = scorePair(q, nm.t);
+        if (s >= min && (!best[nm.r] || s > best[nm.r].score)) {
+          best[nm.r] = { score: Math.round(s * 10) / 10, matched: nm.name, alias: nm.alias, record: records[nm.r] };
+        }
+      });
+      return Object.keys(best).map(function (k) { return best[k]; })
+        .sort(function (a, b) { return b.score - a.score; }).slice(0, opts.limit || 8);
+    }
+    return { screen: screen, size: N };
+  }
+  return { build: build, normalise: normalise, tokens: tokens };
+});
+</script>
+<script>
+const DATA = {"meta":{"gleifRetrieved":"2026-11-17 04:21 UTC","lists":{"ofac_entities":10112,"un_entities":274,"names":22368,"un_generated":"2026-11-17T00:00:02.485Z","retrieved":"2026-11-17"},"evaluation":{"typo":{"tot":289,"hit80":264,"hit90":234},"reorder":{"tot":299,"hit80":299,"hit90":299},"suffix":{"tot":300,"hit80":300,"hit90":300},"clean":{"names":1000,"flag80":1,"flag90":0}},"listNames":22363},"reports":[{"id":"335800TYLGG93MM7PR89","name":"INFOSYS LIMITED","legalName":"INFOSYS LIMITED","country":"IN","outcome":"STANDARD","summary":"Identity confirmed and no sanctions match. Ready for standard sign-off.","identity":{"lei":"335800TYLGG93MM7PR89","registry":"Ministry of Corporate Affairs (India)","registryId":"L85110KA1981PLC013115","isCIN":true,"address":"ELECTRONICS CITY, HOSUR ROAD,, BANGALORE, 560100","jurisdiction":"IN","created":"1981-07-01","leiStatus":"ISSUED","corroboration":"FULLY_CORROBORATED","lastUpdate":"2026-05-30","nextRenewal":"2027-07-20","url":"https://search.gleif.org/#/record/335800TYLGG93MM7PR89"},"ownership":{"direct":{"note":"No parent: no known person or company controls it","code":"NO_KNOWN_PERSON"},"ultimate":{"note":"No parent: no known person or company controls it","code":"NO_KNOWN_PERSON"}},"hits":[],"flags":[],"steps":[{"step":"Resolve legal entity","source":"GLEIF LEI record","url":"https://search.gleif.org/#/record/335800TYLGG93MM7PR89","result":"INFOSYS LIMITED · LEI 335800TYLGG93MM7PR89 · active"},{"step":"Map ownership","source":"GLEIF relationship records","url":"https://search.gleif.org/#/record/335800TYLGG93MM7PR89","result":"No parent: no known person or company controls it"},{"step":"Screen sanctions lists","source":"OFAC SDN list and UN Security Council Consolidated List","result":"1 name screened against 22,363 list names: no potential match"},{"step":"Apply policy rules","source":"Rules SAN-01, SAN-02, ID-01, ID-02, OWN-01","result":"No rule triggered"},{"step":"Route to a person","source":"Policy","result":"Standard sign-off by an analyst"}]},{"id":"5493003UOETFYRONLG31","name":"RELIANCE INDUSTRIES LIMITED","legalName":"RELIANCE INDUSTRIES LIMITED","country":"IN","outcome":"STANDARD","summary":"Identity confirmed and no sanctions match. Ready for standard sign-off.","identity":{"lei":"5493003UOETFYRONLG31","registry":"Ministry of Corporate Affairs (India)","registryId":"L17110MH1973PLC019786","isCIN":true,"address":"3 RD FLOORMAKER CHAMBER IV 222 NARIMAN POINT, MUMBAI, 400021","jurisdiction":"IN","created":"1973-05-08","leiStatus":"ISSUED","corroboration":"FULLY_CORROBORATED","lastUpdate":"2026-11-02","nextRenewal":"2027-11-21","url":"https://search.gleif.org/#/record/5493003UOETFYRONLG31"},"ownership":{"direct":{"note":"No consolidating parent reported","code":"NON_CONSOLIDATING"},"ultimate":{"note":"No consolidating parent reported","code":"NON_CONSOLIDATING"}},"hits":[],"flags":[],"steps":[{"step":"Resolve legal entity","source":"GLEIF LEI record","url":"https://search.gleif.org/#/record/5493003UOETFYRONLG31","result":"RELIANCE INDUSTRIES LIMITED · LEI 5493003UOETFYRONLG31 · active"},{"step":"Map ownership","source":"GLEIF relationship records","url":"https://search.gleif.org/#/record/5493003UOETFYRONLG31","result":"No consolidating parent reported"},{"step":"Screen sanctions lists","source":"OFAC SDN list and UN Security Council Consolidated List","result":"1 name screened against 22,363 list names: no potential match"},{"step":"Apply policy rules","source":"Rules SAN-01, SAN-02, ID-01, ID-02, OWN-01","result":"No rule triggered"},{"step":"Route to a person","source":"Policy","result":"Standard sign-off by an analyst"}]},{"id":"335800ZQ6I4E2JXENC50","name":"HDFC BANK LIMITED","legalName":"HDFC BANK LIMITED","country":"IN","outcome":"STANDARD","summary":"Identity confirmed and no sanctions match. Ready for standard sign-off.","identity":{"lei":"335800ZQ6I4E2JXENC50","registry":"Ministry of Corporate Affairs (India)","registryId":"L65920MH1994PLC080618","isCIN":true,"address":"HDFC BANK HOUSE, SENAPATI BAPAT MARG , LOWER PAREL (WEST), MUMBAI, 400013","jurisdiction":"IN","created":"1994-08-29","leiStatus":"ISSUED","corroboration":"FULLY_CORROBORATED","lastUpdate":"2025-12-11","nextRenewal":"2027-02-06","url":"https://search.gleif.org/#/record/335800ZQ6I4E2JXENC50"},"ownership":{"direct":{"note":"No parent: no known person or company controls it","code":"NO_KNOWN_PERSON"},"ultimate":{"note":"No parent: no known person or company controls it","code":"NO_KNOWN_PERSON"}},"hits":[],"flags":[],"steps":[{"step":"Resolve legal entity","source":"GLEIF LEI record","url":"https://search.gleif.org/#/record/335800ZQ6I4E2JXENC50","result":"HDFC BANK LIMITED · LEI 335800ZQ6I4E2JXENC50 · active"},{"step":"Map ownership","source":"GLEIF relationship records","url":"https://search.gleif.org/#/record/335800ZQ6I4E2JXENC50","result":"No parent: no known person or company controls it"},{"step":"Screen sanctions lists","source":"OFAC SDN list and UN Security Council Consolidated List","result":"1 name screened against 22,363 list names: no potential match"},{"step":"Apply policy rules","source":"Rules SAN-01, SAN-02, ID-01, ID-02, OWN-01","result":"No rule triggered"},{"step":"Route to a person","source":"Policy","result":"Standard sign-off by an analyst"}]},{"id":"335800E6C75YGSGD5T66","name":"TATA STEEL LIMITED","legalName":"TATA STEEL LIMITED","country":"IN","outcome":"STANDARD","summary":"Identity confirmed and no sanctions match. Ready for standard sign-off.","identity":{"lei":"335800E6C75YGSGD5T66","registry":"Ministry of Corporate Affairs (India)","registryId":"L27100MH1907PLC000260","isCIN":true,"address":"BOMBAY HOUSE, 24, HOMI MODY STREET, FORT, MUMBAI, MUMBAI, 400001","jurisdiction":"IN","created":"1907-08-25","leiStatus":"ISSUED","corroboration":"FULLY_CORROBORATED","lastUpdate":"2026-06-06","nextRenewal":"2027-07-23","url":"https://search.gleif.org/#/record/335800E6C75YGSGD5T66"},"ownership":{"direct":{"note":"No parent: no known person or company controls it","code":"NO_KNOWN_PERSON"},"ultimate":{"note":"No parent: no known person or company controls it","code":"NO_KNOWN_PERSON"}},"hits":[],"flags":[],"steps":[{"step":"Resolve legal entity","source":"GLEIF LEI record","url":"https://search.gleif.org/#/record/335800E6C75YGSGD5T66","result":"TATA STEEL LIMITED · LEI 335800E6C75YGSGD5T66 · active"},{"step":"Map ownership","source":"GLEIF relationship records","url":"https://search.gleif.org/#/record/335800E6C75YGSGD5T66","result":"No parent: no known person or company controls it"},{"step":"Screen sanctions lists","source":"OFAC SDN list and UN Security Council Consolidated List","result":"1 name screened against 22,363 list names: no potential match"},{"step":"Apply policy rules","source":"Rules SAN-01, SAN-02, ID-01, ID-02, OWN-01","result":"No rule triggered"},{"step":"Route to a person","source":"Policy","result":"Standard sign-off by an analyst"}]},{"id":"3358003FR3JIC5FRXA90","name":"LARSEN & TOUBRO LIMITED","legalName":"LARSEN & TOUBRO LIMITED","country":"IN","outcome":"STANDARD","summary":"Identity confirmed and no sanctions match. Ready for standard sign-off.","identity":{"lei":"3358003FR3JIC5FRXA90","registry":"Ministry of Corporate Affairs (India)","registryId":"L99999MH1946PLC004768","isCIN":true,"address":"L&T HOUSE, BALLARD ESTATE, NAROTTAM MORARJEE MARG, MUMBAI, 400001","jurisdiction":"IN","created":"1946-02-06","leiStatus":"ISSUED","corroboration":"FULLY_CORROBORATED","lastUpdate":"2026-06-18","nextRenewal":"2027-08-01","url":"https://search.gleif.org/#/record/3358003FR3JIC5FRXA90"},"ownership":{"direct":{"note":"No parent: no known person or company controls it","code":"NO_KNOWN_PERSON"},"ultimate":{"note":"No parent: no known person or company controls it","code":"NO_KNOWN_PERSON"}},"hits":[],"flags":[],"steps":[{"step":"Resolve legal entity","source":"GLEIF LEI record","url":"https://search.gleif.org/#/record/3358003FR3JIC5FRXA90","result":"LARSEN & TOUBRO LIMITED · LEI 3358003FR3JIC5FRXA90 · active"},{"step":"Map ownership","source":"GLEIF relationship records","url":"https://search.gleif.org/#/record/3358003FR3JIC5FRXA90","result":"No parent: no known person or company controls it"},{"step":"Screen sanctions lists","source":"OFAC SDN list and UN Security Council Consolidated List","result":"1 name screened against 22,363 list names: no potential match"},{"step":"Apply policy rules","source":"Rules SAN-01, SAN-02, ID-01, ID-02, OWN-01","result":"No rule triggered"},{"step":"Route to a person","source":"Policy","result":"Standard sign-off by an analyst"}]},{"id":"5493007IW5N37IKRPM32","name":"HINDUSTAN UNILEVER LIMITED","legalName":"HINDUSTAN UNILEVER LIMITED","country":"IN","outcome":"STANDARD","summary":"Identity confirmed and no sanctions match. Ready for standard sign-off.","identity":{"lei":"5493007IW5N37IKRPM32","registry":"Ministry of Corporate Affairs (India)","registryId":"L15140MH1933PLC002030","isCIN":true,"address":"UNILEVER HOUSE, B D SAWANT MARG CHAKALA, MUMBAI, 400099","jurisdiction":"IN","created":"1933-10-16","leiStatus":"ISSUED","corroboration":"FULLY_CORROBORATED","lastUpdate":"2026-02-17","nextRenewal":"2027-03-18","url":"https://search.gleif.org/#/record/5493007IW5N37IKRPM32"},"ownership":{"direct":{"name":"UNILEVER PLC","country":"GB","lei":"549300MKFYEKVRWML317","url":"https://search.gleif.org/#/record/549300MKFYEKVRWML317"},"ultimate":{"name":"UNILEVER PLC","country":"GB","lei":"549300MKFYEKVRWML317","url":"https://search.gleif.org/#/record/549300MKFYEKVRWML317"}},"hits":[],"flags":[],"steps":[{"step":"Resolve legal entity","source":"GLEIF LEI record","url":"https://search.gleif.org/#/record/5493007IW5N37IKRPM32","result":"HINDUSTAN UNILEVER LIMITED · LEI 5493007IW5N37IKRPM32 · active"},{"step":"Map ownership","source":"GLEIF relationship records","url":"https://search.gleif.org/#/record/5493007IW5N37IKRPM32","result":"Direct parent UNILEVER PLC (GB); ultimate parent UNILEVER PLC"},{"step":"Screen sanctions lists","source":"OFAC SDN list and UN Security Council Consolidated List","result":"2 names screened against 22,363 list names: no potential match"},{"step":"Apply policy rules","source":"Rules SAN-01, SAN-02, ID-01, ID-02, OWN-01","result":"No rule triggered"},{"step":"Route to a person","source":"Policy","result":"Standard sign-off by an analyst"}]},{"id":"335800D27PBEESKKD357","name":"MARUTI SUZUKI INDIA LIMITED","legalName":"MARUTI SUZUKI INDIA LIMITED","country":"IN","outcome":"STANDARD","summary":"Identity confirmed and no sanctions match. Ready for standard sign-off.","identity":{"lei":"335800D27PBEESKKD357","registry":"Ministry of Corporate Affairs (India)","registryId":"L34103DL1981PLC011375","isCIN":true,"address":"PLOT NO 1, NELSON MANDELA ROAD, VASANT KUNJ, NEW DELHI, 110070","jurisdiction":"IN","created":"1981-02-23","leiStatus":"ISSUED","corroboration":"FULLY_CORROBORATED","lastUpdate":"2026-06-10","nextRenewal":"2027-07-29","url":"https://search.gleif.org/#/record/335800D27PBEESKKD357"},"ownership":{"direct":{"name":"SUZUKI MOTOR CORPORATION","country":"JP","lei":"353800D83H0V3ZV1SV24","url":"https://search.gleif.org/#/record/353800D83H0V3ZV1SV24"},"ultimate":{"name":"SUZUKI MOTOR CORPORATION","country":"JP","lei":"353800D83H0V3ZV1SV24","url":"https://search.gleif.org/#/record/353800D83H0V3ZV1SV24"}},"hits":[],"flags":[],"steps":[{"step":"Resolve legal entity","source":"GLEIF LEI record","url":"https://search.gleif.org/#/record/335800D27PBEESKKD357","result":"MARUTI SUZUKI INDIA LIMITED · LEI 335800D27PBEESKKD357 · active"},{"step":"Map ownership","source":"GLEIF relationship records","url":"https://search.gleif.org/#/record/335800D27PBEESKKD357","result":"Direct parent SUZUKI MOTOR CORPORATION (JP); ultimate parent SUZUKI MOTOR CORPORATION"},{"step":"Screen sanctions lists","source":"OFAC SDN list and UN Security Council Consolidated List","result":"2 names screened against 22,363 list names: no potential match"},{"step":"Apply policy rules","source":"Rules SAN-01, SAN-02, ID-01, ID-02, OWN-01","result":"No rule triggered"},{"step":"Route to a person","source":"Policy","result":"Standard sign-off by an analyst"}]},{"id":"3358008SYYY9CPWH5D94","name":"NESTLE INDIA LIMITED","legalName":"NESTLE INDIA LIMITED","country":"IN","outcome":"STANDARD","summary":"Identity confirmed and no sanctions match. Ready for standard sign-off.","identity":{"lei":"3358008SYYY9CPWH5D94","registry":"Ministry of Corporate Affairs (India)","registryId":"L15202DL1959PLC003786","isCIN":true,"address":"100 / 101, WORLD TRADE CENTRE, BARAKHAMBA LANE CENTRAL DELHI, NEW DELHI, 110001","jurisdiction":"IN","created":"2017-07-31","leiStatus":"ISSUED","corroboration":"FULLY_CORROBORATED","lastUpdate":"2026-07-13","nextRenewal":"2027-03-04","url":"https://search.gleif.org/#/record/3358008SYYY9CPWH5D94"},"ownership":{"direct":{"note":"No consolidating parent reported","code":"NON_CONSOLIDATING"},"ultimate":{"note":"No consolidating parent reported","code":"NON_CONSOLIDATING"}},"hits":[],"flags":[],"steps":[{"step":"Resolve legal entity","source":"GLEIF LEI record","url":"https://search.gleif.org/#/record/3358008SYYY9CPWH5D94","result":"NESTLE INDIA LIMITED · LEI 3358008SYYY9CPWH5D94 · active"},{"step":"Map ownership","source":"GLEIF relationship records","url":"https://search.gleif.org/#/record/3358008SYYY9CPWH5D94","result":"No consolidating parent reported"},{"step":"Screen sanctions lists","source":"OFAC SDN list and UN Security Council Consolidated List","result":"1 name screened against 22,363 list names: no potential match"},{"step":"Apply policy rules","source":"Rules SAN-01, SAN-02, ID-01, ID-02, OWN-01","result":"No rule triggered"},{"step":"Route to a person","source":"Policy","result":"Standard sign-off by an analyst"}]},{"id":"335800HJQJFZ3CJLJ709","name":"SIEMENS LIMITED","legalName":"SIEMENS LIMITED","country":"IN","outcome":"STANDARD","summary":"Identity confirmed and no sanctions match. Ready for standard sign-off.","identity":{"lei":"335800HJQJFZ3CJLJ709","registry":"Ministry of Corporate Affairs (India)","registryId":"L28920MH1957PLC010839","isCIN":true,"address":"BIRLA AURORA, LEVEL 21,, PLOT NO. 1080, DR. ANNIE BESANT ROAD, WORLI, MUMBAI, 400030","jurisdiction":"IN","created":"1957-03-01","leiStatus":"ISSUED","corroboration":"FULLY_CORROBORATED","lastUpdate":"2026-05-19","nextRenewal":"2027-07-16","url":"https://search.gleif.org/#/record/335800HJQJFZ3CJLJ709"},"ownership":{"direct":{"name":"Siemens Aktiengesellschaft","country":"DE","lei":"W38RGI023J3WT1HWRP32","url":"https://search.gleif.org/#/record/W38RGI023J3WT1HWRP32"},"ultimate":{"name":"Siemens Aktiengesellschaft","country":"DE","lei":"W38RGI023J3WT1HWRP32","url":"https://search.gleif.org/#/record/W38RGI023J3WT1HWRP32"}},"hits":[],"flags":[],"steps":[{"step":"Resolve legal entity","source":"GLEIF LEI record","url":"https://search.gleif.org/#/record/335800HJQJFZ3CJLJ709","result":"SIEMENS LIMITED · LEI 335800HJQJFZ3CJLJ709 · active"},{"step":"Map ownership","source":"GLEIF relationship records","url":"https://search.gleif.org/#/record/335800HJQJFZ3CJLJ709","result":"Direct parent Siemens Aktiengesellschaft (DE); ultimate parent Siemens Aktiengesellschaft"},{"step":"Screen sanctions lists","source":"OFAC SDN list and UN Security Council Consolidated List","result":"2 names screened against 22,363 list names: no potential match"},{"step":"Apply policy rules","source":"Rules SAN-01, SAN-02, ID-01, ID-02, OWN-01","result":"No rule triggered"},{"step":"Route to a person","source":"Policy","result":"Standard sign-off by an analyst"}]},{"id":"3358008TVK7S8BSVVW82","name":"BOSCH LIMITED","legalName":"BOSCH LIMITED","country":"IN","outcome":"REVIEW","summary":"No sanctions match, but one point needs a reviewer before sign-off.","identity":{"lei":"3358008TVK7S8BSVVW82","registry":"Ministry of Corporate Affairs (India)","registryId":"L85110KA1951PLC000761","isCIN":true,"address":"HOSUR ROAD, ADUGODI ADUGODI, BANGALORE, 560030","jurisdiction":"IN","created":"1951-11-11","leiStatus":"ISSUED","corroboration":"FULLY_CORROBORATED","lastUpdate":"2026-09-29","nextRenewal":"2027-11-13","url":"https://search.gleif.org/#/record/3358008TVK7S8BSVVW82"},"ownership":{"direct":{"note":"Parent exists but is not disclosed publicly","code":"NON_PUBLIC"},"ultimate":{"note":"Parent exists but is not disclosed publicly","code":"NON_PUBLIC"}},"hits":[],"flags":[{"rule":"OWN-01","level":"medium","text":"A parent exists but is not publicly disclosed. Ask the company for its ownership chart."}],"steps":[{"step":"Resolve legal entity","source":"GLEIF LEI record","url":"https://search.gleif.org/#/record/3358008TVK7S8BSVVW82","result":"BOSCH LIMITED · LEI 3358008TVK7S8BSVVW82 · active"},{"step":"Map ownership","source":"GLEIF relationship records","url":"https://search.gleif.org/#/record/3358008TVK7S8BSVVW82","result":"Parent exists but is not disclosed publicly"},{"step":"Screen sanctions lists","source":"OFAC SDN list and UN Security Council Consolidated List","result":"1 name screened against 22,363 list names: no potential match"},{"step":"Apply policy rules","source":"Rules SAN-01, SAN-02, ID-01, ID-02, OWN-01","result":"OWN-01 triggered"},{"step":"Route to a person","source":"Policy","result":"Reviewer clears the open points"}]},{"id":"549300WE6TAF5EEWQS81","name":"Sberbank","legalName":"Публичное акционерное общество \"Сбербанк России\"","country":"RU","outcome":"ESCALATE","summary":"Potential sanctions match. Do not proceed until a senior reviewer decides.","identity":{"lei":"549300WE6TAF5EEWQS81","registry":"Federal Tax Service (Russia)","registryId":"1027700132195","isCIN":false,"address":"улица Вавилова, дом 19, Москва, 117312","jurisdiction":"RU","created":"1991-06-19","leiStatus":"ISSUED","corroboration":"FULLY_CORROBORATED","lastUpdate":"2026-06-11","nextRenewal":"2027-06-11","url":"https://search.gleif.org/#/record/549300WE6TAF5EEWQS81"},"ownership":{"direct":{"note":"No parent: no known person or company controls it","code":"NO_KNOWN_PERSON"},"ultimate":{"note":"No parent: no known person or company controls it","code":"NO_KNOWN_PERSON"}},"hits":[{"role":"Subject","screened":"Sberbank","score":100,"matched":"PJSC SBERBANK","alias":true,"list":"OFAC","primary":"PUBLIC JOINT STOCK COMPANY SBERBANK OF RUSSIA","program":"UKRAINE-EO13662; RUSSIA-EO14024","countries":["Russia","China","India"],"id":"17018"},{"role":"Subject","screened":"Sberbank","score":100,"matched":"JOINT STOCK COMPANY SBERBANK","alias":false,"list":"OFAC","primary":"JOINT STOCK COMPANY SBERBANK","program":"UKRAINE-EO13662; RUSSIA-EO14024","countries":["Ukraine"],"id":"18715"}],"flags":[{"rule":"SAN-01","level":"high","text":"Name scores 100 against the OFAC list (PUBLIC JOINT STOCK COMPANY SBERBANK OF RUSSIA). A senior reviewer must confirm or clear it."}],"steps":[{"step":"Resolve legal entity","source":"GLEIF LEI record","url":"https://search.gleif.org/#/record/549300WE6TAF5EEWQS81","result":"Sberbank · LEI 549300WE6TAF5EEWQS81 · active"},{"step":"Map ownership","source":"GLEIF relationship records","url":"https://search.gleif.org/#/record/549300WE6TAF5EEWQS81","result":"No parent: no known person or company controls it"},{"step":"Screen sanctions lists","source":"OFAC SDN list and UN Security Council Consolidated List","result":"2 names screened against 22,363 list names: 2 potential matches"},{"step":"Apply policy rules","source":"Rules SAN-01, SAN-02, ID-01, ID-02, OWN-01","result":"SAN-01 triggered"},{"step":"Route to a person","source":"Policy","result":"Senior reviewer decides"}]}]};
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const num = n => Number(n).toLocaleString('en-IN');
+const LISTNAME = { OFAC: 'OFAC SDN list', UN: 'UN Consolidated List' };
+const m = DATA.meta;
+
+$('fresh').innerHTML = [
+  'OFAC list retrieved ' + m.lists.retrieved,
+  'UN list dated ' + m.lists.un_generated.slice(0, 10),
+  'Registry records retrieved ' + m.gleifRetrieved.slice(0, 10),
+  num(m.listNames) + ' list names'
+].map(t => '<span class="chip">' + esc(t) + '</span>').join('');
+
+/* ---- tests ---- */
+(function () {
+  const e = m.evaluation, pct = (a, b) => Math.round(1000 * a / b) / 10 + '%';
+  const rows = [
+    [pct(e.typo.hit80, e.typo.tot), 'found with one spelling mistake', e.typo.hit80 + ' of ' + e.typo.tot],
+    [pct(e.reorder.hit80, e.reorder.tot), 'found with words in a different order', e.reorder.hit80 + ' of ' + e.reorder.tot],
+    [pct(e.suffix.hit80, e.suffix.tot), 'found with a different ending, such as Pvt Ltd', e.suffix.hit80 + ' of ' + e.suffix.tot],
+    [e.clean.flag80 + ' in ' + num(e.clean.names), 'clean Indian company names flagged for a reviewer', e.clean.flag90 + ' escalated']
+  ];
+  $('tests').innerHTML = rows.map(r => '<div class="test"><span class="n">' + esc(r[0]) + '</span><span>' + esc(r[1]) + '</span><span class="small muted">' + esc(r[2]) + '</span></div>').join('');
+})();
+
+/* ---- hits ---- */
+function hitHtml(h) {
+  const weak = h.score < 90;
+  return '<div class="hit"><div class="hit-top"><span class="hit-name">' + esc(h.primary) + '</span><span class="score">' + h.score.toFixed(1) + ' / 100</span></div>' +
+    '<div class="bar' + (weak ? ' weak' : '') + '"><i style="width:' + h.score + '%"></i></div>' +
+    '<div class="small muted">' + esc(LISTNAME[h.list] || h.list) + (h.program ? ' · programme ' + esc(h.program) : '') +
+    (h.countries && h.countries.length ? ' · addresses in ' + esc(h.countries.slice(0, 5).join(', ')) : '') + '</div>' +
+    (h.matched !== h.primary ? '<div class="small muted">Matched on the listed name “' + esc(h.matched) + '”</div>' : '') +
+    (h.role && h.role !== 'Subject' ? '<div class="small muted">Found through the ' + esc(h.role.toLowerCase()) + '</div>' : '') + '</div>';
+}
+
+/* ---- live screening ---- */
+let M = null;
+function runScreen(q) {
+  q = q.trim();
+  if (!q) { $('live').innerHTML = '<p class="small muted">Type a company name, then press Screen.</p>'; return; }
+  if (!M) { $('live').innerHTML = '<p class="small muted">The lists are still loading. Try again in a moment.</p>'; return; }
+  const hits = M.screen(q, { min: 80 }).map(h => ({ score: h.score, matched: h.matched, primary: h.record.n, list: h.record.l, program: h.record.p, countries: h.record.c }));
+  const top = hits.length ? hits[0].score : 0;
+  let v;
+  if (top >= 90) v = ['v-bad', 'Potential match', 'Send “' + q + '” to a senior reviewer before anything else happens.'];
+  else if (top >= 80) v = ['v-warn', 'Weak similarity', 'Probably a different company. A reviewer should look and clear it.'];
+  else v = ['v-ok', 'No potential match', '“' + q + '” does not resemble any of the ' + num(M.size) + ' names on the two lists.'];
+  $('live').innerHTML = '<div class="verdict ' + v[0] + '"><strong>' + esc(v[1]) + '</strong><span>' + esc(v[2]) + '</span></div>' + hits.map(hitHtml).join('');
+}
+$('f').addEventListener('submit', e => { e.preventDefault(); runScreen($('q').value); });
+document.querySelectorAll('.tries button').forEach(b => b.addEventListener('click', () => { $('q').value = b.dataset.q; runScreen(b.dataset.q); }));
+
+fetch('lists.json').then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).then(recs => {
+  M = Matcher.build(recs);
+  if (!$('q').value) $('q').value = 'Sberbank';
+  runScreen($('q').value);
+}).catch(() => {
+  $('live').innerHTML = '<p class="small muted">The sanctions lists could not be loaded, so live screening is off. The saved reports below still work. Reload the page to try again.</p>';
+});
+
+/* ---- reports ---- */
+const OUT = {
+  STANDARD: ['v-ok', 'Ready for standard sign-off'],
+  REVIEW: ['v-warn', 'Needs a reviewer'],
+  ESCALATE: ['v-bad', 'Escalate to a senior reviewer']
+};
+const title = s => /[a-z]/.test(s) ? s : s.toLowerCase().replace(/(^|[\s&(-])([a-z])/g, (x, a, b) => a + b.toUpperCase()).replace(/\bHdfc\b/, 'HDFC');
+function ownerNode(label, o) {
+  return '<div class="node"><span class="small muted">' + esc(label) + '</span>' +
+    (o.name ? '<b>' + esc(title(o.name)) + '</b><span class="small muted">' + esc(o.country) + ' · LEI <a class="mono" href="' + esc(o.url) + '">' + esc(o.lei) + '</a></span>'
+            : '<b>' + esc(o.note) + '</b>' + (o.code ? '<span class="small muted mono">GLEIF code ' + esc(o.code) + '</span>' : '')) + '</div>';
+}
+function showReport(id) {
+  const r = DATA.reports.find(x => x.id === id), o = OUT[r.outcome], i = r.identity;
+  document.querySelectorAll('#picker button').forEach(b => b.setAttribute('aria-pressed', b.dataset.id === id ? 'true' : 'false'));
+  const sameParent = r.ownership.direct.lei && r.ownership.direct.lei === r.ownership.ultimate.lei;
+  $('report').innerHTML = '<div class="card">' +
+    '<div class="verdict ' + o[0] + '"><strong>' + esc(o[1]) + '</strong><span>' + esc(r.summary) + '</span></div>' +
+    '<h3>Who it is</h3><dl>' +
+      '<dt>Legal name</dt><dd>' + esc(r.legalName) + '</dd>' +
+      '<dt>' + (i.isCIN ? 'CIN' : 'Registry number') + '</dt><dd><span class="mono">' + esc(i.registryId) + '</span><br><span class="small muted">' + esc(i.registry) + '</span></dd>' +
+      '<dt>LEI</dt><dd><a class="mono" href="' + esc(i.url) + '">' + esc(i.lei) + '</a><br><span class="small muted">' + (i.leiStatus === 'ISSUED' ? 'Current' : esc(i.leiStatus)) + ' · last updated ' + esc(i.lastUpdate) + ' · ' + esc(i.corroboration.toLowerCase().replace(/_/g, ' ')) + '</span></dd>' +
+      '<dt>Registered address</dt><dd>' + esc(i.address) + ', ' + esc(r.country) + '</dd>' +
+      (i.created ? '<dt>Incorporated</dt><dd>' + esc(i.created) + '</dd>' : '') +
+    '</dl>' +
+    '<h3>Who owns it</h3><div class="chain">' +
+      (sameParent ? ownerNode('Direct and ultimate parent', r.ownership.direct)
+        : (r.ownership.ultimate.name ? ownerNode('Ultimate parent', r.ownership.ultimate) + '<div class="link"></div>' : '') +
+          (r.ownership.direct.name ? ownerNode('Direct parent', r.ownership.direct) : ownerNode('Parent', r.ownership.direct))) +
+      '<div class="link"></div><div class="node"><span class="small muted">Company checked</span><b>' + esc(title(r.name)) + '</b></div></div>' +
+    '<h3>Sanctions screening</h3>' +
+      (r.hits.length ? r.hits.map(hitHtml).join('') : '<p>No potential match for the company or its parents.</p>') +
+    (r.flags.length ? '<h3>Points for the reviewer</h3>' + r.flags.map(f => '<div class="flag"><span class="tag t-' + f.level + '">' + esc(f.rule) + '</span><span>' + esc(f.text) + '</span></div>').join('') : '') +
+    '<h3>What the tool did, in order</h3><ol class="steps">' +
+      r.steps.map(s => '<li><div><b>' + esc(s.step) + '</b><span>' + esc(s.result) + '</span><br><span class="small muted">Source: ' + (s.url ? '<a href="' + esc(s.url) + '">' + esc(s.source) + '</a>' : esc(s.source)) + '</span></div></li>').join('') +
+    '</ol></div>';
+}
+$('picker').innerHTML = DATA.reports.map(r => '<button type="button" data-id="' + esc(r.id) + '" aria-pressed="false"><span class="dot d-' + r.outcome + '"></span>' + esc(title(r.name).replace(/ Limited$/, '')) + '</button>').join('');
+document.querySelectorAll('#picker button').forEach(b => b.addEventListener('click', () => showReport(b.dataset.id)));
+showReport((DATA.reports.find(r => r.name.indexOf('HINDUSTAN UNILEVER') === 0) || DATA.reports[0]).id);
+</script>
+</body>
+</html>
